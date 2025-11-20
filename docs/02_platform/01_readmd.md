@@ -1,5 +1,5 @@
 
-## **Part IV: The Vision of a `go-quadgit` Platform**
+## The Vision of a `go-quadgit` Platform
 
 ## **Chapter 6: Building Full Applications on `go-quadgit`**
 *   **6.1: `go-quadgit` as an Application Backend**
