@@ -1,0 +1,61 @@
+
+### **How to Design the Branch Protection API**
+
+The branch protection rules should be treated as a sub-resource of a namespace and branch. This leads to a clean, RESTful API design.
+
+#### **1. The Data Model**
+
+First, we need a data model for the protection rule object itself. This would be stored in `app.db` under a key like `app:bpr:<namespace>:<branch_name>`.
+
+**`BranchProtection` Go Struct:**
+```go
+type BranchProtection struct {
+    Namespace         string `json:"namespace"`
+    Branch            string `json:"branch"`
+    AllowDirectPush   bool   `json:"allow_direct_push"`
+    RequireMergeRequest bool   `json:"require_merge_request"`
+    RequiredApprovals int    `json:"required_approvals"`
+    PreventForcePush  bool   `json:"prevent_force_push"`
+    // Could also include things like "required_status_checks" from a CI system
+}
+```
+
+#### **2. The API Endpoints**
+
+The endpoints would be nested under namespaces and branches.
+
+*   **`GET /ns/:namespace/branches/:branch/protection`**
+    *   **Action:** Retrieves the current protection rules for a specific branch.
+    *   **Permissions:** Requires `reader` access to the namespace.
+    *   **Response:** `200 OK` with the `BranchProtection` JSON object. If no rules are set, it could return a `404 Not Found`.
+
+*   **`PUT /ns/:namespace/branches/:branch/protection`**
+    *   **Action:** Creates or fully overwrites the protection rules for a branch. The request body contains the full `BranchProtection` object.
+    *   **Permissions:** Requires `admin` access to the namespace.
+    *   **Optimistic Locking:** This is a mutable object, so `ETag`/`If-Match` with a version counter should be used to prevent concurrent edits by two administrators.
+    *   **Response:** `200 OK` or `201 Created` with the updated resource.
+
+*   **`PATCH /ns/:namespace/branches/:branch/protection`**
+    *   **Action:** Partially updates the protection rules. The request body would contain only the fields to be changed (e.g., `{"required_approvals": 3}`).
+    *   **Permissions:** Requires `admin` access to the namespace.
+    *   **Optimistic Locking:** Also requires `ETag`/`If-Match`.
+    *   **Response:** `200 OK` with the updated resource.
+
+*   **`DELETE /ns/:namespace/branches/:branch/protection`**
+    *   **Action:** Removes all protection rules from a branch, making it unprotected.
+    *   **Permissions:** Requires `admin` access to the namespace.
+    *   **Response:** `204 No Content`.
+
+#### **3. Integration with the Authorization Middleware**
+
+The authorization middleware is where these rules are actually enforced. The logic for an incoming `push` operation would now look like this:
+
+1.  **Authentication Middleware:** Verifies the user's identity.
+2.  **Authorization Middleware:**
+    a. Checks if the user has the basic `repo:write` permission for the target namespace (standard RBAC check).
+    b. **New Step:** It then checks if a branch protection rule exists for the target branch (e.g., by checking for the key `app:bpr:production:main`).
+    c. If rules exist, it loads them.
+    d. It applies the rules:
+        *   Is `allow_direct_push` set to `false`? If so, reject the push with `HTTP 403 Forbidden` and a clear error message: "Direct pushes to the 'main' branch are disabled. Please use a Merge Request."
+        *   Is this a force push (`--force`) and is `prevent_force_push` set to `true`? If so, reject the push.
+    e. If all checks pass, the request is allowed to proceed to the main handler.

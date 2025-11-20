@@ -1,0 +1,109 @@
+
+
+**Sub-System 5: Collaborative Application Features**
+
+**Subtitle:** *Building Multi-Tenant, Application-Aware, and Logically Consistent Systems*
+
+**Book Description:** With a scalable engine and a robust server in place, we can now move up the stack to build the intelligent, collaborative workflows that set `go-quadgit` apart. This book is about leveraging the platform to solve real-world team problems. It's not just about storing data; it's about managing how teams interact with that data safely and efficiently.
+
+First, we will implement true multi-tenancy with namespaces, allowing you to host hundreds of isolated projects on a single server. Then, we will build the cornerstone of team collaboration—the Merge Request system—as a distinct application layer. Finally, we will make our system "smart" by implementing schema-aware merging, a feature that understands the rules of your ontology and prevents a user from committing or merging logically inconsistent data. This book transforms `go-quadgit` from a versioning system into a truly collaborative knowledge engineering platform.
+
+**Prerequisites:** Readers must be comfortable with the `go-quadgit` Core API and the REST server architecture detailed in **Book 1, 2, and 3**. A solid understanding of REST principles and database transactions is essential.
+
+# **Part I: Multi-Tenancy and Data Portability**
+
+*This part focuses on managing multiple, distinct repositories within a single `go-quadgit` installation, a critical feature for any enterprise or service provider.*
+
+## **Chapter 1: The Case for Multi-Tenancy**
+*   **1.1: Beyond a Single Repository**
+    *   Explores the use cases that drive the need for logical separation: isolating projects, managing dev/staging/prod environments, and enforcing per-project security.
+*   **1.2: The Architectural Decision: Key-Space Partitioning**
+    *   A deep dive into our chosen implementation strategy. It explains why prepending `ns:<namespace_name>:` to every key is more efficient and scalable than running separate database processes or containers.
+*   **1.3: The Namespace Data Model**
+    *   Details the `sys:namespaces` system key for tracking tenants and the impact of the key prefix on all other data types (`obj:`, `ref:`, `spog:`, etc.).
+*   **1.4: Refactoring the `Repository` for Namespace Awareness**
+    *   Shows the practical Go implementation: modifying the `quadstore.Open()` function and the `Repository` struct to be initialized with a namespace context that is automatically applied to every database operation.
+
+## **Chapter 2: Managing Namespaces**
+*   **2.1: The `ns` Command Suite**
+    *   Provides the full implementation for the `go-quadgit ns` CLI commands: `list`, `create`, `rm`, and `use`.
+*   **2.2: The Namespace REST API**
+    *   Designing and implementing the `/namespaces` REST endpoints, including `GET /namespaces` to list them and `POST /namespaces` to create a new one.
+*   **2.3: The Global `-n` Flag and Context Switching**
+    *   Details how the CLI and server middleware select the correct namespace context for an operation, prioritizing the explicit flag, then falling back to the user's configured default.
+
+## **Chapter 3: Cross-Namespace Operations: The `cp` Command**
+*   **3.1: The "Promote to Production" Workflow**
+    *   Presents a practical use case: copying a tested `release` branch from a `staging` namespace to the `main` branch of the `production` namespace.
+*   **3.2: The Scalable Copy Algorithm**
+    *   A step-by-step implementation guide for the `cp` command. It emphasizes the efficiency gained from content-addressing.
+    *   **Step 1:** Resolve refs and discover the object graph to be copied.
+    *   **Step 2:** The "Copy Missing Objects" loop, which checks for an object's existence in the target namespace before performing a read/write operation.
+*   **3.3: `cp` as a Forking Mechanism**
+    *   Shows how the same command can be used to create a personal "fork" of a production graph for safe, isolated experimentation.
+
+
+
+## **Part I: Multi-Tenancy with Namespaces**
+
+*This part focuses on building the core feature that allows a single `go-quadgit` instance to serve multiple, isolated user groups.*
+
+## **Chapter 1: The Case for Multi-Tenancy**
+*   **1.1: Why One Repository Is Not Enough**
+    *   Presents detailed use cases that drive the need for logical separation:
+        *   **Project Isolation:** A software company needs separate graphs for its `mobile-app` and `web-app` projects.
+        *   **Environment Promotion:** The standard `dev -> staging -> production` workflow for enterprise data.
+        *   **Customer-Specific Data:** A SaaS provider using `go-quadgit` as a backend needs to host a separate, secure graph for each of its customers.
+*   **1.2: The Architectural Decision: Key-Space Partitioning**
+    *   A deep dive into our chosen implementation strategy. It contrasts key-space partitioning with more heavyweight alternatives like running multiple Docker containers or separate database processes, highlighting the efficiency and simplicity of the prefixing approach.
+*   **1.3: The Namespaced Data Model**
+    *   Provides a visual before-and-after of the BadgerDB key layout, showing how every key type (`obj:`, `ref:`, `spog:`) is now prefixed with `ns:<namespace_name>:`.
+    *   Details the special `sys:namespaces` key, which acts as the central registry for all tenants on the server.
+
+## **Chapter 2: Implementing the Namespace Management Layer**
+*   **2.1: Refactoring the Core `Repository` for Namespace Awareness**
+    *   A full, practical guide to modifying the `quadstore.Open()` function and the `Repository` struct. The `Repository` will now be initialized with a `namespace` string, which its methods will use to construct the correct key prefixes for every database call.
+*   **2.2: The `ns` Command Suite: A CLI for Administrators**
+    *   Provides the complete Go implementation for the `go-quadgit ns` command using Cobra. This includes the logic for:
+        *   `list`: Reading and parsing the `sys:namespaces` key.
+        *   `create`: Atomically adding to the list and then running the `init` logic within the new namespace.
+        *   `rm`: A dangerous operation that requires a `--force` flag and iterates over a prefix to delete all associated keys.
+*   **2.3: The Namespace REST API**
+    *   Implements the administrative REST endpoints:
+        *   `GET /namespaces`: For listing all namespaces.
+        *   `POST /namespaces`: For creating a new namespace.
+        *   `DELETE /namespaces/:name`: For deleting a namespace.
+    *   This section will include the implementation of the authorization middleware to ensure only `admin`-level users can access these endpoints.
+
+## **Chapter 3: Working with Namespaces**
+*   **3.1: The `-n` Global Flag and Context Switching**
+    *   Details how to add a persistent global flag to the root Cobra command.
+*   **3.2: The `ns use` Command and User Configuration**
+    *   Implements the `go-quadgit ns use <name>` command, which modifies a local configuration file (e.g., `~/.quadgit/config.yml`) to store the user's default context.
+*   **3.3: The Server-Side Context**
+    *   Explains how the REST API will determine the namespace for an operation: first by checking for an explicit `X-Quadgit-Namespace` header, then falling back to a default associated with the user's authentication token.
+
+
+
+
+**Subtitle:** *From a Single Repository to a Distributed Network of Knowledge*
+
+**Book Description:** A powerful version control system is useful for an individual, but its true value is unlocked when it enables teams and organizations to collaborate on a shared source of truth. This book is dedicated to transforming `go-quadgit` from a single-repository system into a multi-tenant and distributed platform, capable of managing dozens of isolated projects and synchronizing knowledge across organizational boundaries.
+
+First, we will build a complete, first-class multi-tenancy system using **namespaces**, allowing you to securely host separate, logically isolated knowledge graphs on a single server. We will implement the full CLI and API for managing these tenants. Then, we will build upon this foundation to create a powerful mechanism for data portability, the `cp` command, which enables workflows like promoting changes from a staging to a production namespace. Finally, we will implement the full `push` and `pull` protocol, turning `go-quadgit` into a truly distributed system and paving the way for a federated web of knowledge.
+
+
+## **Part II: Data Portability and Federation**
+
+*This part builds on the namespace concept to enable the movement of data between repositories, both internal and external.*
+
+## **Chapter 4: Cross-Namespace Operations: The `cp` Command**
+*   **4.1: The "Promote to Production" Workflow as a First-Class Feature**
+    *   Frames the `cp` command as the primary tool for safe, auditable data promotion between environments.
+*   **4.2: The Scalable Copy Algorithm: A Deep Dive**
+    *   A step-by-step implementation guide for `go-quadgit cp <source_ns>:<ref> <target_ns>:<ref>`.
+    *   **Step 1: Resolve Refs:** Getting the start and end points of the copy.
+    *   **Step 2: Discover Object Graph:** Implementing the backward history walk to build a set of all required object hashes.
+    *   **Step 3: The "Copy Missing Objects" Loop:** This is the core logic. It shows how to efficiently check for an object's existence in the target namespace before performing a database read from the source namespace. It highlights the massive performance gain from content-addressing.
+    *   **Step 4: Creating the Target Reference:** The final, atomic write to create the new branch pointer in the target namespace.
+
